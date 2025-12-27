@@ -285,6 +285,11 @@ def ReadTextures(bs):
     #   unk5 = reader.ReadInt64(),
     #   unk6 = reader.ReadBytes(0x28)
 
+	bs.seek(0x04)
+	header_size = bs.readUShort()
+
+	bs.seek(0x0C)
+	table_size = bs.readUInt()
 
 	bs.seek(0x20)
 	tex_count = bs.readUShort()
@@ -333,17 +338,31 @@ def ReadTextures(bs):
 		bs.seek(text_off)
 		tex_names.append(bs.readString())
 
-	# TODO: I still don't understand the script from this point onward
-	bs.seek(0x0c)
-	data_start = bs.readUInt() + 0x60
-	data_start = Align(data_start, 0x10)
+	nxtch_data_start = header_size + table_size
+	nxtch_data_start = Align(nxtch_data_start, 0x10)
 
 	for t in range(tex_count):
-		# TODO: Add support to subentries
-
-		bs.seek((t * 0x30) + 0x64)
-		offset = bs.readUInt() + data_start
+		# EXPLANATION:
+		#  - 0x60 is the start of the textures entries
+		#  - 0x04 is because we skip the unk1 property of the texture
+		#  - 0x30 is the size of a texture entry
+		bs.seek((t * 0x30) + 0x60 + 0x04)
+		offset = bs.readUInt() + nxtch_data_start
 		size = bs.readUInt()
+
+		# EXPLANATION: offset is at the start of a NxtchHeader, which has that structure:
+		#   magic = reader.ReadString(8),
+        #   textureDataSize = reader.ReadInt32(),
+        #   unk1 = reader.ReadInt32(),
+        #   unk2 = reader.ReadInt32(),
+        #   width = reader.ReadInt32(),
+        #   height = reader.ReadInt32(),
+        #   unk3 = reader.ReadInt32(),
+        #   unk4 = reader.ReadInt32(),
+        #   format = reader.ReadInt32(),
+        #   mipMapCount = reader.ReadInt32(),
+        #   textureDataSize2 = reader.ReadInt32()
+
 		bs.seek(offset + 0x8)
 		data_size = bs.readUInt()
 		bs.readUInt()
@@ -361,11 +380,11 @@ def ReadTextures(bs):
 		blockSize = 16 if width >= 1024 else 16
 
 		maxblockheight = 16 if width >= 512 and height <= 512 else 16
-		maxblockheight = 8 if width <= 512 and height <= 256 else 16
-		maxblockheight = 8 if width <= 256 and height <= 256 else maxblockheight
-		maxblockheight = 4 if width <= 256 and height <= 128 else maxblockheight
-		maxblockheight = 4 if width <= 128 or height <= 64 else maxblockheight
-		maxblockheight = 1 if width <= 64 or height <= 32 else maxblockheight
+		maxblockheight = 8  if width <= 512 and height <= 256 else 16
+		maxblockheight = 8  if width <= 256 and height <= 256 else maxblockheight
+		maxblockheight = 4  if width <= 256 and height <= 128 else maxblockheight
+		maxblockheight = 4  if width <= 128 or  height <= 64  else maxblockheight
+		maxblockheight = 1  if width <= 64  or  height <= 32  else maxblockheight
 		
 		raw_image = rapi.callExtensionMethod("untile_blocklineargob", raw_image, widthinblocks, heightinblocks, blockSize, maxblockheight)
 		raw_image = rapi.imageDecodeDXT(raw_image, width, height, noesis.FOURCC_BC7)				# always BC7
