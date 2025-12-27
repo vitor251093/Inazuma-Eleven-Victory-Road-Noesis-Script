@@ -1,7 +1,11 @@
+
 # Inazuma Eleven Victory Road (Nintendo Switch)
 # Noesis script adapted by Daiki froms DKDave's Yokai Watch 4 script
 # Load meshes from both .G4PKM and .G4MD files
-# Last updated: 12 April  2024
+# Last updated: 27 December  2025
+
+# If it stops working, check this:
+# https://github.com/FanTranslatorsInternational/Kuriimu2/blob/imgui/plugins/Level5/plugin_level5/Switch/Archive/G4tx.cs
 
 # TO DO LIST:
 
@@ -264,25 +268,79 @@ def ReadTextures(bs):
 	tex_list = []
 	tex_names = []
 
+	# EXPLANATION: The header structure looks like that, with a total size of 0x60:
+	#   magic = reader.ReadString(4),
+    #   headerSize = reader.ReadInt16(),
+    #   fileType = reader.ReadInt16(),
+    #   unk1 = reader.ReadInt32(),
+    #   tableSize = reader.ReadInt32(),
+    #   zeroes = reader.ReadBytes(0x10),
+    #   textureCount = reader.ReadInt16(),
+    #   totalCount = reader.ReadInt16(),
+    #   unk2 = reader.ReadByte(),
+    #   subTextureCount = reader.ReadByte(),
+    #   unk3 = reader.ReadInt16(),
+    #   unk4 = reader.ReadInt32(),
+    #   textureDataSize = reader.ReadInt32(),
+    #   unk5 = reader.ReadInt64(),
+    #   unk6 = reader.ReadBytes(0x28)
+
+
 	bs.seek(0x20)
 	tex_count = bs.readUShort()
 
-	name_off = (tex_count * 0x30) + 0x60 + (tex_count * 4) + tex_count
+	bs.seek(0x22)
+	total_count = bs.readUShort()
+
+	bs.seek(0x25)
+	sub_entries_count = bs.readByte()
+
+	# EXPLANATION: Each texture has this structure, with size of 0x30:
+	#   unk1 = reader.ReadInt32(),
+    #   nxtchOffset = reader.ReadInt32(),
+    #   nxtchSize = reader.ReadInt32(),
+    #   unk2 = reader.ReadInt32(),
+    #   unk3 = reader.ReadInt32(),
+    #   unk4 = reader.ReadInt32(),
+    #   width = reader.ReadInt16(),
+    #   height = reader.ReadInt16(),
+    #   const2 = reader.ReadInt32(),
+    #   unk5 = reader.ReadBytes(0x10)
+	#
+	# And each subentry has this structure, with size of 0x18:
+	#   entryId = reader.ReadInt16(),
+    #   unk1 = reader.ReadInt16(),
+    #   x = reader.ReadInt16(),
+    #   y = reader.ReadInt16(),
+    #   width = reader.ReadInt16(),
+    #   height = reader.ReadInt16(),
+    #   unk2 = reader.ReadInt32(),
+    #   unk3 = reader.ReadInt32(),
+    #   unk4 = reader.ReadInt32()
+	#
+	# (total_count * 4) skips the hashes
+	# total_count skips the IDs
+	name_off = 0x60 + (tex_count * 0x30) + (sub_entries_count * 0x18)
+	name_off = Align(name_off, 16)
+	name_off = name_off + (total_count * 4) + total_count
 	name_off = Align(name_off, 4)
 
+	# EXPLANATION: Read texture and subentries names
 	bs.seek(name_off)
-
-	for n in range(tex_count):
+	for n in range(total_count):
 		bs.seek(name_off + (n * 2))
 		text_off = bs.readUShort() + name_off
 		bs.seek(text_off)
 		tex_names.append(bs.readString())
 
+	# TODO: I still don't understand the script from this point onward
 	bs.seek(0x0c)
 	data_start = bs.readUInt() + 0x60
 	data_start = Align(data_start, 0x10)
 
 	for t in range(tex_count):
+		# TODO: Add support to subentries
+
 		bs.seek((t * 0x30) + 0x64)
 		offset = bs.readUInt() + data_start
 		size = bs.readUInt()
